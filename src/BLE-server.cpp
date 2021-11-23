@@ -49,8 +49,9 @@ void setup() {
 #ifdef DEBUG
   Serial.begin(115200);
 #endif
-  esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
-
+  MEMREPORT("--- setup");
+  // esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
+  // MEMREPORT("--- after   esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT");
   connectToWIFI();
 #ifdef AWS
   connectToAWS();
@@ -66,6 +67,7 @@ void setup() {
 #endif
 }
 
+static bool is_connected;
 void loop() {
 #ifdef AWS
   client.loop();
@@ -73,7 +75,7 @@ void loop() {
 #ifdef DEBUG
   Serial.println(".");
 #endif
-  MEMREPORT("loop");
+  // MEMREPORT("loop");
   delay(5000);
 }
 
