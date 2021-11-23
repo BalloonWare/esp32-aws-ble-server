@@ -9,7 +9,7 @@
 #include "secrets.h"
 #include <ArduinoJson.h>
 // #include <MQTTClient.h>
-#include <WiFiClientSecure.h>
+// #include <WiFiClientSecure.h>
 
 #include <HTTPClient.h>
 #include "spdlog/fmt/bin_to_hex.h"
@@ -33,24 +33,20 @@ void connectToHttps(const char *serverUrl);
 void startBLEserver();
 void startAdvertising();
 void sendStats(uint16_t id, std::string arg);
-void messageHandler(String &topic, String &payload);
 
 void setup() {
   Serial.begin(115200);
 
   spdlog::set_level((spdlog::level::level_enum)SPDLOG_LEVEL_DEBUG);
-  MEMREPORT("--- setup");
+  // MEMREPORT("--- before mem_release");
   // esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
-  // MEMREPORT("--- after
-  // esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT");
+  // delay(500);
+  // MEMREPORT("--- after mem_release");
 
   connectToWIFI();
-
   connectToHttps(SERVER_URL);
-
   startBLEserver();
   startAdvertising();
-
   LOGD("Listening for new devices");
 }
 
@@ -165,10 +161,6 @@ void connectToHttps(const char *serverUrl) {
 
   // client.POST(payload, size);
   // client.end();
-}
-
-void messageHandler(String &topic, String &payload) {
-  Serial.println("incoming: " + topic + " - " + payload);
 }
 
 void sendStats(uint16_t id, std::string arg) {
