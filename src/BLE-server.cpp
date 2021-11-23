@@ -42,7 +42,8 @@ void setup() {
 #endif
   MEMREPORT("--- setup");
   // esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
-  // MEMREPORT("--- after   esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT");
+  // MEMREPORT("--- after
+  // esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT");
   connectToWIFI();
 
   connectToHttps(SERVER_URL);
@@ -57,10 +58,15 @@ void setup() {
 
 static bool is_connected;
 void loop() {
-#ifdef DEBUG
-  Serial.println(".");
-#endif
-  // MEMREPORT("loop");
+
+  if (httpclient.connected() ^ is_connected) { // edge
+    LOGD("httpclient: {}connected", httpclient.connected() ? "" : "dis");
+    MEMREPORT("loop");
+    is_connected = httpclient.connected(); // track
+  }
+// #ifdef DEBUG
+//   Serial.println(".");
+// #endif
   delay(5000);
 }
 
@@ -220,4 +226,3 @@ void sendStats(std::string arg) {
 
   httpclient.POST(jsonBuffer);
 }
-
