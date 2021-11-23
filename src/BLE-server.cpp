@@ -8,15 +8,12 @@
 #include "WiFi.h"
 #include "secrets.h"
 #include <ArduinoJson.h>
-#include <MQTTClient.h>
+// #include <MQTTClient.h>
 #include <WiFiClientSecure.h>
 
 #include <HTTPClient.h>
 
 #define DEBUG
-
-#define AWS_IOT_SUBSCRIBE_TOPIC "thing/esp32/sub"
-#define AWS_IOT_PUBLISH_TOPIC "thing/esp32/pub"
 
 std::string bleAdvertisingString = "XXXXXXXXXX";
 bool deviceConnected = false;
@@ -29,15 +26,9 @@ uint16_t deviceID;
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
 
-#ifdef AWS
-WiFiClientSecure net = WiFiClientSecure();
-MQTTClient client = MQTTClient(256);
-#endif
-
 HTTPClient httpclient;
 
 void connectToWIFI();
-void connectToAWS();
 void connectToHttps(const char *serverUrl);
 void startBLEserver();
 void startAdvertising();
@@ -53,11 +44,8 @@ void setup() {
   // esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
   // MEMREPORT("--- after   esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT");
   connectToWIFI();
-#ifdef AWS
-  connectToAWS();
-#else
+
   connectToHttps(SERVER_URL);
-#endif
 
   startBLEserver();
   startAdvertising();
@@ -69,9 +57,6 @@ void setup() {
 
 static bool is_connected;
 void loop() {
-#ifdef AWS
-  client.loop();
-#endif
 #ifdef DEBUG
   Serial.println(".");
 #endif
@@ -208,41 +193,6 @@ void connectToWIFI() {
     Serial.print(".");
   }
 }
-#ifdef AWS
-void connectToAWS() {
-  // Configure WiFiClientSecure to use the AWS IoT device credentials
-  net.setCACert(AWS_CERT_CA);
-  net.setCertificate(AWS_CERT_CRT);
-  net.setPrivateKey(AWS_CERT_PRIVATE);
-
-  // Connect to the MQTT broker on the AWS endpoint we defined earlier
-  client.begin(AWS_IOT_ENDPOINT, 443, net);
-
-  // Create a message handler
-  client.onMessage(messageHandler);
-
-#ifdef DEBUG
-  Serial.println("AWS IoT: Connecting...");
-#endif
-
-  while (!client.connect(THINGNAME)) {
-    Serial.print(".");
-    delay(100);
-  }
-
-  if (!client.connected()) {
-    Serial.println("AWS IoT: Timeout!");
-    return;
-  }
-
-  // Subscribe to a topic
-  client.subscribe(AWS_IOT_SUBSCRIBE_TOPIC);
-
-#ifdef DEBUG
-  Serial.println("AWS IoT: Connected");
-#endif
-}
-#endif
 
 void connectToHttps(const char *serverUrl) {
   httpclient.begin(serverUrl);
@@ -265,12 +215,9 @@ void sendStats(std::string arg) {
 
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // print to client
-#ifdef AWS
-  client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
-#else
+
   Serial.printf("posting: %s \n", jsonBuffer);
 
   httpclient.POST(jsonBuffer);
-#endif
 }
 
