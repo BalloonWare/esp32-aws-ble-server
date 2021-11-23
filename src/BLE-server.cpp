@@ -12,12 +12,10 @@
 #include <WiFiClientSecure.h>
 
 #include <HTTPClient.h>
+#include "spdlog/fmt/bin_to_hex.h"
 
-#define DEBUG
-
+#define DEVICE_NAME "BallonVario"
 std::string bleAdvertisingString = "XXXXXXXXXX";
-bool deviceConnected = false;
-bool oldDeviceConnected = false;
 uint16_t deviceID;
 
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -27,23 +25,25 @@ BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
 
 HTTPClient httpclient;
+bool httpclient_is_connected;
+uint32_t ble_client_count;
 
 void connectToWIFI();
 void connectToHttps(const char *serverUrl);
 void startBLEserver();
 void startAdvertising();
-void sendStats(std::string arg);
+void sendStats(uint16_t id, std::string arg);
 void messageHandler(String &topic, String &payload);
 
 void setup() {
-  spdlog::set_level((spdlog::level::level_enum)SPDLOG_LEVEL_DEBUG);
-#ifdef DEBUG
   Serial.begin(115200);
-#endif
+
+  spdlog::set_level((spdlog::level::level_enum)SPDLOG_LEVEL_DEBUG);
   MEMREPORT("--- setup");
   // esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
   // MEMREPORT("--- after
   // esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT");
+
   connectToWIFI();
 
   connectToHttps(SERVER_URL);
@@ -51,94 +51,59 @@ void setup() {
   startBLEserver();
   startAdvertising();
 
-#ifdef DEBUG
-  Serial.println("Listening for new devices");
-#endif
+  LOGD("Listening for new devices");
 }
 
-static bool is_connected;
 void loop() {
 
-  if (httpclient.connected() ^ is_connected) { // edge
+  if (httpclient.connected() ^ httpclient_is_connected) { // edge
     LOGD("httpclient: {}connected", httpclient.connected() ? "" : "dis");
     MEMREPORT("loop");
-    is_connected = httpclient.connected(); // track
+    httpclient_is_connected = httpclient.connected(); // track
   }
-// #ifdef DEBUG
-//   Serial.println(".");
-// #endif
-  delay(5000);
+
+  delay(10);
 }
 
 class CharCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pCharacteristic) {
     std::string value = pCharacteristic->getValue();
-
-#ifdef DEBUG
-    Serial.println("client wrote something...");
-#endif
-
-    if (value.length() > 0) {
-      for (int i = 0; i < value.length(); i++) {
-        Serial.print(value[i]);
-      }
-
-      Serial.println();
-    }
-    sendStats(value);
+    LOGD("client wrote: {}", spdlog::to_hex(value));
+    sendStats(9999, "my c aint good enough"); // spdlog::to_hex(value).
   }
 
   void onRead(BLECharacteristic *pCharacteristic) {
-#ifdef DEBUG
-    Serial.println("Message received by client");
-#endif
+    LOGD("Message received by client");
   }
 };
 
 class ServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
-    deviceConnected = true;
-
+    ble_client_count++;
     pCharacteristic->setValue(bleAdvertisingString);
     pCharacteristic->notify();
 
     BLEDevice::startAdvertising();
-
     deviceID = pServer->getConnId();
-
-#ifdef DEBUG
-    Serial.print("new device ");
-    Serial.print(deviceID);
-    Serial.println(" connected");
-#endif
-
-    sendStats("new device connected");
+    LOGD("device {} disconnected", deviceID);
+    sendStats(deviceID, "new device connected");
   };
 
   void onDisconnect(BLEServer *pServer) {
-    deviceConnected = false;
-
+    ble_client_count--;
     deviceID = pServer->getConnId();
-
-#ifdef DEBUG
-    Serial.print("device ");
-    Serial.print(deviceID);
-    Serial.println(" disconnected");
-#endif
-
-    sendStats("device disconnected");
-
+    LOGD("device {} disconnected", deviceID);
+    sendStats(deviceID, "device disconnected");
     delay(500); // give the bluetooth stack the chance to get things ready
     pServer->startAdvertising(); // restart advertising
   }
 };
 
 void startBLEserver() {
-#ifdef DEBUG
-  Serial.println("BLE server: Starting...");
-#endif
 
-  BLEDevice::init("ESP32-BLE");
+  LOGD("BLE server: Starting...");
+
+  BLEDevice::init(DEVICE_NAME);
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -161,18 +126,15 @@ void startBLEserver() {
   // Start the service
   pService->start();
 
-#ifdef DEBUG
-  Serial.println("BLE server: Started");
-#endif
+  LOGD("BLE server: Started");
 }
 
 /**
  * Start the server advertising its existence
  */
 void startAdvertising() {
-#ifdef DEBUG
-  Serial.println("BLE advertising: starting...");
-#endif
+
+  LOGD("BLE advertising: starting...");
 
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
@@ -181,18 +143,14 @@ void startAdvertising() {
   pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
 
-#ifdef DEBUG
-  Serial.println("BLE advertising: started");
-#endif
+  LOGD("BLE advertising: started");
 }
 
 void connectToWIFI() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-#ifdef DEBUG
-  Serial.println("Connecting to Wi-Fi");
-#endif
+  LOGD("Connecting to Wi-Fi");
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -213,10 +171,11 @@ void messageHandler(String &topic, String &payload) {
   Serial.println("incoming: " + topic + " - " + payload);
 }
 
-void sendStats(std::string arg) {
+void sendStats(uint16_t id, std::string arg) {
   StaticJsonDocument<200> doc;
   doc["time"] = millis();
-  doc["device_id"] = 815;
+  doc["clients"] = ble_client_count;
+  doc["device_id"] = id;
   doc["message"] = arg;
 
   char jsonBuffer[512];
